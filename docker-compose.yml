@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: codebase_intel_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: codebase_intel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  chromadb:
+    image: chromadb/chroma:0.4.22
+    container_name: codebase_intel_chroma
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: codebase_intel_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/codebase_intel
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    ports:
+      - "8001:8000"
+    depends_on:
+      - postgres
+      - chromadb
+    volumes:
+      - ./backend:/app
+      - backend_storage:/app/storage_data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: codebase_intel_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8001/api/v1
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  chroma_data:
+  backend_storage:
