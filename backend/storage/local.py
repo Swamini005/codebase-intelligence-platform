@@ -5,7 +5,7 @@ from backend.core.config import settings
 
 class LocalStorage(StorageProvider):
     def __init__(self, base_dir: str = None):
-        self.base_dir = base_dir or settings.STORAGE_DIR
+        self.base_dir = base_dir or settings.REPOS_BASE_DIR
         os.makedirs(self.base_dir, exist_ok=True)
 
     def save_file(self, file_path: str, content: BinaryIO) -> str:
