@@ -1,0 +1,68 @@
+cat > .gitignore << 'EOF'
+# ─── Python ───────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ─── Virtual environments ─────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Environment variables ────────────────────
+.env
+*.env.local
+*.env.*.local
+
+# ─── Cloned repositories (your pipeline data) ─
+repos/
+backend/repos/
+
+# ─── Database ─────────────────────────────────
+*.db
+*.sqlite3
+
+# ─── ChromaDB local storage ───────────────────
+chroma_data/
+.chroma/
+
+# ─── Node / Frontend ──────────────────────────
+node_modules/
+.next/
+out/
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+
+# ─── IDE ──────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Testing & Coverage ───────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# ─── Logs ─────────────────────────────────────
+*.log
+logs/
+
+# ─── Docker ───────────────────────────────────
+docker-data/
+
+# ─── Alembic ──────────────────────────────────
+# keep alembic.ini but ignore local override
+alembic_local.ini
+EOF
