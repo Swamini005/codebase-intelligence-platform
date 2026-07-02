@@ -1,0 +1,58 @@
+# Run this in your project root
+cat > .gitmessage << 'EOF'
+# <type>(<scope>): <short summary> (max 72 chars)
+# |<----  Using a maximum of 72 characters  ---->|
+
+
+# |<----   Leave a blank line, then body below  ---->|
+# Explain WHY this change was made (not what — the diff shows that)
+
+
+# |<----   Optional: footer for issues/breaking changes  ---->|
+# Refs: #issue-number
+# BREAKING CHANGE: describe what breaks and migration path
+
+# ─────────────────────────────────────────────
+# TYPE (pick one):
+#   feat      → new feature
+#   fix       → bug fix
+#   chore     → tooling, deps, config (no logic change)
+#   refactor  → restructure without behaviour change
+#   test      → adding or fixing tests
+#   docs      → readme, comments, docstrings
+#   perf      → performance improvement
+#   ci        → github actions, docker, deployment
+#
+# SCOPE (pick one for your project):
+#   config        → core/config.py, .env
+#   exceptions    → core/exceptions.py
+#   github        → integrations/github/
+#   storage       → storage/
+#   models        → models/
+#   schemas       → schemas/
+#   dao           → data_access/
+#   services      → services/
+#   api           → api/
+#   rag           → rag/
+#   vectorstore   → vectorstore/
+#   embeddings    → providers/embeddings/
+#   llm           → providers/llm/
+#   parser        → providers/parser/
+#   chunking      → services/chunking.py
+#   intelligence  → intelligence/
+#   frontend      → frontend/
+#   docker        → Dockerfile, docker-compose.yml
+#   deps          → requirements.txt, package.json
+#   migrations    → migrations/
+#   tests         → any test file
+#
+# EXAMPLES:
+#   feat(github): add GitHubService clone and pull methods
+#   fix(cloner): delete partial clone directory on failure
+#   chore(deps): add gitpython pathspec to requirements.txt
+#   refactor(api): extract error handling into middleware
+#   test(ingestion): add smoke tests for ingest endpoint
+#   feat(embeddings): add sentence-transformers provider
+#   ci(docker): add postgres service to docker-compose
+# ─────────────────────────────────────────────
+EOF
