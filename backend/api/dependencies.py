@@ -23,8 +23,8 @@ from backend.services.architecture import ArchitectureService, ArchitectureServi
 from backend.intelligence.architecture import ArchitectureAnalyzer
 from backend.intelligence.dependencies import StaticDependencyAnalyzer
 
-def get_repository_service() -> RepositoryService:
-    return RepositoryServiceImpl()
+def get_repository_service(db: Session = Depends(get_db)) -> RepositoryService:
+    return RepositoryServiceImpl(db=db)
 
 def get_vectorstore_service() -> VectorStoreService:
     chroma_store = ChromaVectorStore()
