@@ -20,3 +20,8 @@ class RepositoryResponse(BaseSchema, RepositoryBase):
 class RepositoryIndexStatus(BaseModel):
     repository_id: int
     status: RepositoryStatus
+
+class RepositoryIngest(BaseModel):
+    github_url: str
+    user_id: int
+
