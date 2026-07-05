@@ -1,15 +1,86 @@
-from fastapi import APIRouter, Depends, UploadFile, File as FastAPIFile, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, UploadFile, File as FastAPIFile
 from sqlalchemy.orm import Session
 from typing import List
 import datetime
+
 from backend.db.session import get_db
-from backend.schemas.repository import RepositoryResponse, RepositoryCreateUpload, RepositoryCreateGithub, RepositoryIndexStatus
+from backend.schemas.repository import (
+    RepositoryResponse,
+    RepositoryCreateUpload,
+    RepositoryCreateGithub,
+    RepositoryIndexStatus,
+    RepositoryIngest
+)
 from backend.schemas.symbol import SymbolResponse
 from backend.services.repository import RepositoryService
 from backend.api.dependencies import get_repository_service
+from backend.core.config import get_settings, Settings
+from backend.core.exceptions import (
+    InvalidGitHubURLException,
+    RepoNotFoundException,
+    RepoCloningTimeoutException,
+    ProcessingException,
+    CodebaseIntelException
+)
 from backend.shared.enums import RepositoryStatus, SymbolType
+from backend.data_access.repository_dao import repository_dao
 
 router = APIRouter()
+
+@router.post("/ingest", response_model=dict, status_code=status.HTTP_202_ACCEPTED)
+async def ingest_repository(
+    payload: RepositoryIngest,
+    db: Session = Depends(get_db),
+    repo_service: RepositoryService = Depends(get_repository_service),
+    settings: Settings = Depends(get_settings)
+):
+    """POST /repositories/ingest - Ingest repository from GitHub."""
+    try:
+        result = await repo_service.ingest_repository(payload.github_url, payload.user_id, db=db)
+        return result
+    except InvalidGitHubURLException as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except RepoNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except RepoCloningTimeoutException as e:
+        raise HTTPException(status_code=status.HTTP_408_REQUEST_TIMEOUT, detail=str(e))
+    except ProcessingException as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except CodebaseIntelException as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("", response_model=List[RepositoryResponse])
+def list_repositories(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """GET /repositories/ - List all repositories (paginated)."""
+    return repository_dao.get_multi(db, skip=skip, limit=limit)
+
+@router.get("/{repo_id}", response_model=RepositoryResponse)
+async def get_repository(
+    repo_id: int,
+    db: Session = Depends(get_db),
+    repo_service: RepositoryService = Depends(get_repository_service)
+):
+    """GET /repositories/{repo_id} - Get repo metadata."""
+    repo = await repo_service.get_repository(repo_id, db=db)
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    return repo
+
+@router.delete("/{repo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_repository(
+    repo_id: int,
+    db: Session = Depends(get_db),
+    repo_service: RepositoryService = Depends(get_repository_service)
+):
+    """DELETE /repositories/{repo_id} - Delete cloned repository and DB record."""
+    try:
+        await repo_service.delete_repository(repo_id, db=db)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 @router.post("/upload", response_model=RepositoryResponse)
 def upload_repository(
@@ -18,9 +89,8 @@ def upload_repository(
     db: Session = Depends(get_db),
     repo_service: RepositoryService = Depends(get_repository_service)
 ):
-    """POST /repositories/upload - Handle file upload and create repo record."""
+    """POST /repositories/upload - Handle file upload and create repo record (legacy)."""
     repo_in = RepositoryCreateUpload(name=name)
-    # Stub user_id = 1
     return repo_service.create_from_upload(db, user_id=1, repo_in=repo_in)
 
 @router.post("/github", response_model=RepositoryResponse)
@@ -29,79 +99,56 @@ def connect_github(
     db: Session = Depends(get_db),
     repo_service: RepositoryService = Depends(get_repository_service)
 ):
-    """POST /repositories/github - Connect external GitHub repository."""
-    # Stub user_id = 1
+    """POST /repositories/github - Connect external GitHub repository (legacy)."""
     return repo_service.create_from_github(db, user_id=1, repo_in=repo_in)
 
-@router.get("", response_model=List[RepositoryResponse])
-def list_repositories(
-    db: Session = Depends(get_db),
-    repo_service: RepositoryService = Depends(get_repository_service)
-):
-    """GET /repositories - List all user repositories."""
-    return repo_service.get_all_repositories(db, user_id=1)
-
-@router.get("/{id}", response_model=RepositoryResponse)
-def get_repository(
-    id: int,
-    db: Session = Depends(get_db),
-    repo_service: RepositoryService = Depends(get_repository_service)
-):
-    """GET /repositories/{id} - Get repo metadata."""
-    repo = repo_service.get_repository(db, repo_id=id)
-    if not repo:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    return repo
-
-@router.post("/{id}/index", response_model=RepositoryIndexStatus)
+@router.post("/{repo_id}/index", response_model=RepositoryIndexStatus)
 def trigger_index(
-    id: int,
+    repo_id: int,
     db: Session = Depends(get_db),
     repo_service: RepositoryService = Depends(get_repository_service)
 ):
-    """POST /repositories/{id}/index - Trigger parsing/embedding/indexing."""
-    success = repo_service.trigger_indexing(db, repo_id=id)
+    """POST /repositories/{repo_id}/index - Trigger parsing/embedding/indexing."""
+    success = repo_service.trigger_indexing(db, repo_id=repo_id)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to start indexing")
-    status = repo_service.get_status(db, repo_id=id)
-    return RepositoryIndexStatus(repository_id=id, status=status)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to start indexing")
+    status_val = repo_service.get_status(db, repo_id=repo_id)
+    return RepositoryIndexStatus(repository_id=repo_id, status=status_val)
 
-@router.get("/{id}/status", response_model=RepositoryIndexStatus)
+@router.get("/{repo_id}/status", response_model=RepositoryIndexStatus)
 def get_index_status(
-    id: int,
+    repo_id: int,
     db: Session = Depends(get_db),
     repo_service: RepositoryService = Depends(get_repository_service)
 ):
-    """GET /repositories/{id}/status - Fetch indexing progress status."""
-    status = repo_service.get_status(db, repo_id=id)
-    return RepositoryIndexStatus(repository_id=id, status=status)
+    """GET /repositories/{repo_id}/status - Fetch indexing progress status."""
+    status_val = repo_service.get_status(db, repo_id=repo_id)
+    return RepositoryIndexStatus(repository_id=repo_id, status=status_val)
 
-@router.post("/{id}/reindex", response_model=RepositoryIndexStatus)
+@router.post("/{repo_id}/reindex", response_model=RepositoryIndexStatus)
 def trigger_reindex(
-    id: int,
+    repo_id: int,
     db: Session = Depends(get_db),
     repo_service: RepositoryService = Depends(get_repository_service)
 ):
-    """POST /repositories/{id}/reindex - Trigger full re-indexing of a repository."""
-    # Reset status to pending then indexing
-    success = repo_service.trigger_indexing(db, repo_id=id)
+    """POST /repositories/{repo_id}/reindex - Trigger full re-indexing of a repository."""
+    success = repo_service.trigger_indexing(db, repo_id=repo_id)
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to trigger reindexing")
-    status = repo_service.get_status(db, repo_id=id)
-    return RepositoryIndexStatus(repository_id=id, status=status)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to trigger reindexing")
+    status_val = repo_service.get_status(db, repo_id=repo_id)
+    return RepositoryIndexStatus(repository_id=repo_id, status=status_val)
 
-@router.get("/{id}/symbols", response_model=List[SymbolResponse])
+@router.get("/{repo_id}/symbols", response_model=List[SymbolResponse])
 def get_repository_symbols(
-    id: int,
+    repo_id: int,
     db: Session = Depends(get_db)
 ):
-    """GET /repositories/{id}/symbols - Return extracted functions, classes, interfaces, and enums."""
-    # Stub response matching SymbolResponse schema
+    """GET /repositories/{repo_id}/symbols - Return extracted functions, classes, interfaces, and enums."""
     now = datetime.datetime.utcnow()
     return [
         SymbolResponse(
             id=1,
-            repository_id=id,
+            repository_id=repo_id,
             file_id=10,
             name="PlatformException",
             symbol_type=SymbolType.CLASS,
@@ -113,7 +160,7 @@ def get_repository_symbols(
         ),
         SymbolResponse(
             id=2,
-            repository_id=id,
+            repository_id=repo_id,
             file_id=10,
             name="get_logger",
             symbol_type=SymbolType.FUNCTION,

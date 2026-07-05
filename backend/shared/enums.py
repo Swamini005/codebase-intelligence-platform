@@ -5,6 +5,13 @@ class RepositoryStatus(str, Enum):
     INDEXING = "INDEXING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    
+    # New statuses for ingestion pipeline
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+    pending = "pending"
+
 
 class AnalysisType(str, Enum):
     ARCHITECTURE = "ARCHITECTURE"

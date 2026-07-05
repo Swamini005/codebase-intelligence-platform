@@ -7,9 +7,9 @@ from fastapi.responses import JSONResponse
 from fastapi import Request
 
 app = FastAPI(
-    title=settings.PROJECT_NAME,
+    title=settings.APP_NAME,
     version="1.0.0",
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_PREFIX}/openapi.json"
 )
 
 # Set CORS middleware
@@ -30,7 +30,7 @@ def platform_exception_handler(request: Request, exc: PlatformException):
     )
 
 # Include main router
-app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/")
 def root():
